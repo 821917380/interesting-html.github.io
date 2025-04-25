@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>音乐可视化</title>
+  <style>
+    body {
+      margin: 0;
+      width: 100vw;
+      height: 100vh;
+      background: black;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <canvas></canvas>
+  <audio src="./static/bensound-ukulele.mp3" crossorigin="anonymous"></audio>
+  <script>
+    ;(function (window) {
+      const cvs = document.querySelector('canvas')
+      const ctx = cvs.getContext('2d')
+      const audioDom = document.querySelector('audio')
+
+      function initCvs(params) {
+        const size = 500
+        cvs.width = size * devicePixelRatio
+        cvs.height = size * devicePixelRatio
+        cvs.style.width = cvs.style.height = size + 'px'
+      }
+      initCvs()
+
+      function draw(datas, maxValue) {
+        const dpi = devicePixelRatio || 1;
+        const width = cvs.width;
+        const height = cvs.height;
+        ctx.clearRect(0, 0, width, height);
+
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const innerRadius = width / 4 + 20 * dpi;
+        const minLineLength = 2 * dpi;
+        const maxLineLength = width / 2 - innerRadius;
+        const angleStep = 360 / (datas.length - 1);
+
+        for (let i = 0; i < datas.length; i++) {
+          const value = datas[i];
+          const angleDeg = angleStep * i;
+          const angleRad = (angleDeg * Math.PI) / 180;
+
+          const lineLength = Math.max((value / maxValue) * maxLineLength, minLineLength);
+          const startX = centerX + Math.cos(angleRad) * innerRadius;
+          const startY = centerY + Math.sin(angleRad) * innerRadius;
+          const endX = centerX + Math.cos(angleRad) * (innerRadius + lineLength);
+          const endY = centerY + Math.sin(angleRad) * (innerRadius + lineLength);
+
+          ctx.beginPath();
+          ctx.strokeStyle = `hsl(${angleDeg}, 65%, 65%)`;
+          ctx.lineWidth = minLineLength;
+          ctx.moveTo(startX, startY);
+          ctx.lineTo(endX, endY);
+          ctx.stroke();
+        }
+      }
+
+      // 用法示例
+      draw(new Array(256).fill(0), 255);
+
+      let isInit = false
+      let analyser, buffer
+
+      
+      audioDom.onplay = () => {
+        if (isInit) {
+          return
+        }
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+        const source = audioCtx.createMediaElementSource(audioDom)
+
+        // 创建一个音频分析器节点
+        analyser = audioCtx.createAnalyser()
+        analyser.fftSize = 512 // 设置FFT大小
+        buffer = new Uint8Array(analyser.frequencyBinCount) // 创建一个缓冲区来存储频谱数据
+
+        source.connect(analyser)
+
+        analyser.connect(audioCtx.destination) // 连接到音频输出
+        isInit = true
+      }
+      
+      document.body.addEventListener('click', () => {
+        audioDom.play();
+      }, { once: true });
+
+      function animate() {
+        requestAnimationFrame(animate)
+        if (!isInit) {
+          return
+        }
+        analyser.getByteFrequencyData(buffer) // 获取频谱数据
+        const offset = Math.floor((buffer.length * 2) / 3)
+        const datas = new Array(offset * 2)
+        for (let i = 0; i < offset; i++) {
+          datas[i] = datas[datas.length - i - 1] = buffer[i] 
+        }
+        draw(datas, 255)
+      }
+      animate()
+    })(window)
+  </script>
+</body>
+</html>
